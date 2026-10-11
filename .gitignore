@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# ---- Android ----
+barcode-deck-android/.gradle/
+barcode-deck-android/.kotlin/
+barcode-deck-android/build/
+barcode-deck-android/app/build/
+barcode-deck-android/local.properties
+barcode-deck-android/.idea/
+barcode-deck-android/captures/
+*.apk
+*.aab
+
+# ---- iOS ----
+barcode-deck-ios/build/
+barcode-deck-ios/DerivedData/
+barcode-deck-ios/BarcodeDeck.xcodeproj/project.xcworkspace/xcuserdata/
+barcode-deck-ios/BarcodeDeck.xcodeproj/xcuserdata/
+*.xcuserstate
+xcuserdata/
+
+# ---- iOS generated project (contains local signing; regenerate with
+#      `xcodegen generate` — see HOW_TO_PUBLISH.md) ----
+barcode-deck-ios/BarcodeDeck.xcodeproj/
+
+# ---- General ----
+build/
+DerivedData/
+*.log
