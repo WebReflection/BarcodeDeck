@@ -29,6 +29,9 @@ build/
 DerivedData/
 *.log
 
+# Personal deck exports (local backups, never publish)
+BarcodeDeck-*.json
+
 # ---- Signing (local only) ----
 keystore.properties
 *.jks

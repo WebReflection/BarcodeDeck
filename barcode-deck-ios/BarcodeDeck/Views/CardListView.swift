@@ -17,7 +17,8 @@ struct CardListView: View {
     /// to the store immediately (see moveCards), so it always matches it.
     @State private var orderedCards: [Card] = []
     /// Edit mode: rows grow reorder handles and dragging reorders via onMove.
-    /// Entered with the Edit button, left with Done.
+    /// Entered with the reorder icon (line.3.horizontal), left with the
+    /// checkmark — the mode only reorders, so no misleading "Edit" text.
     @State private var editMode: EditMode = .inactive
 
     /// In-memory snapshot of the last deleted card, undoable for 5 seconds.
@@ -57,14 +58,24 @@ struct CardListView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(editMode == .active ? "Done" : "Edit") {
+                    Button {
                         if editMode == .active {
                             // Every move was already persisted; just exit.
                             withAnimation { editMode = .inactive }
                         } else {
                             withAnimation { editMode = .active }
                         }
+                    } label: {
+                        // Icon toggle instead of "Edit"/"Done" text: the mode
+                        // reorders cards only, and "Edit" suggests per-item
+                        // editing (Android reorders via long-press + drag).
+                        Image(systemName: editMode == .active
+                            ? "checkmark"
+                            : "line.3.horizontal")
                     }
+                    .accessibilityLabel(editMode == .active
+                        ? "Done reordering"
+                        : "Reorder cards")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {

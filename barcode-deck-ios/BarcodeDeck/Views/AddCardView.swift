@@ -251,6 +251,9 @@ struct AddCardView: View {
             symbology: storedSymbology
         )
         modelContext.insert(card)
+        // Flush immediately: autosave alone can lose the card if the
+        // process is killed right after saving (e.g. UI-test teardown).
+        try? modelContext.save()
         dismiss()
     }
 }
