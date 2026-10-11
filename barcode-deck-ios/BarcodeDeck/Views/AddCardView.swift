@@ -240,11 +240,15 @@ struct AddCardView: View {
     // MARK: - Actions
 
     private func save() {
+        // Store the canonical EAN-13 form of UPC-A values so decks match
+        // across platforms and imports de-duplicate (see BarcodeValidation).
+        let (storedValue, storedSymbology) =
+            BarcodeValidation.canonicalize(trimmedBarcodeValue, effectiveSymbology)
         let card = Card(
             name: trimmedName,
             cardDescription: trimmedDescription,
-            barcodeValue: trimmedBarcodeValue,
-            symbology: effectiveSymbology
+            barcodeValue: storedValue,
+            symbology: storedSymbology
         )
         modelContext.insert(card)
         dismiss()

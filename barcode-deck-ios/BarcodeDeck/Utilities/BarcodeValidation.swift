@@ -100,6 +100,29 @@ enum BarcodeValidation {
         }
     }
 
+    // MARK: - Canonical storage form
+
+    /// Canonical storage form: a valid 12-digit UPC-A value is stored as its
+    /// 0-padded EAN-13 equivalent (UPC-A *is* EAN-13 with a leading 0 — the
+    /// rendered bars are identical). Vision already reports UPC-A scans
+    /// padded, but manually typed values and Android imports arrive as 12
+    /// digits; storing the canonical form keeps decks identical across
+    /// platforms so import de-duplication works. Only applies when the
+    /// symbology is UPC-A or unknown — an explicit Code 128 / Code 39
+    /// choice is deliberate and stays untouched.
+    static func canonicalize(_ value: String, _ symbology: String?) -> (String, String?) {
+        if (symbology == "UPC-A" || symbology == nil) && isValidUPCA(value) {
+            return ("0" + value, "EAN-13")
+        }
+        return (value, symbology)
+    }
+
+    /// De-duplication key for a barcode value: the canonical EAN-13 form of
+    /// valid 12-digit UPC-A values, the value itself otherwise.
+    static func canonicalKey(_ value: String) -> String {
+        isValidUPCA(value) ? "0" + value : value
+    }
+
     // MARK: - Manual entry
 
     /// Types offered for manual entry, alphabetically, with Auto-detect

@@ -100,19 +100,25 @@ enum CardTransfer {
     }
 
     /// Plans an import: keeps incoming cards whose barcode value is new,
-    /// skips the ones already present (by trimmed barcode value).
+    /// skips the ones already present (by trimmed barcode value, compared
+    /// in canonical EAN-13 form so a 12-digit UPC-A and its 0-padded
+    /// EAN-13 twin are the same card). Incoming UPC-A values are stored
+    /// padded — see BarcodeValidation.canonicalize.
     static func planImport(_ export: Export, existingValues: Set<String>) -> ImportPlan {
-        var seen = existingValues
+        var seen = Set(existingValues.map { BarcodeValidation.canonicalKey($0) })
         var toImport: [CardData] = []
         var skipped = 0
 
-        for card in export.cards {
+        for var card in export.cards {
             let value = card.barcodeValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if value.isEmpty || seen.contains(value) {
+            if value.isEmpty || seen.contains(BarcodeValidation.canonicalKey(value)) {
                 skipped += 1
                 continue
             }
-            seen.insert(value)
+            let (storedValue, storedSymbology) = BarcodeValidation.canonicalize(value, card.symbology)
+            card.barcodeValue = storedValue
+            card.symbology = storedSymbology
+            seen.insert(BarcodeValidation.canonicalKey(storedValue))
             toImport.append(card)
         }
 

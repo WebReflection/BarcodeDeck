@@ -114,20 +114,24 @@ object CardTransfer {
     }
 
     /** Plans an import: keeps incoming cards whose barcode value is new,
-     *  skips the ones already present (by trimmed barcode value). */
+     *  skips the ones already present (by trimmed barcode value, compared
+     *  in canonical EAN-13 form so a 12-digit UPC-A and its 0-padded
+     *  EAN-13 twin are the same card). Incoming UPC-A values are stored
+     *  padded — see BarcodeValidation.canonicalize. */
     fun planImport(export: CardExport, existingValues: Set<String>): ImportPlan {
-        val seen = existingValues.toMutableSet()
+        val seen = existingValues.map { BarcodeValidation.canonicalKey(it.trim()) }.toMutableSet()
         val toImport = mutableListOf<CardData>()
         var skipped = 0
 
         for (card in export.cards) {
             val value = card.barcodeValue.trim()
-            if (value.isEmpty() || seen.contains(value)) {
+            if (value.isEmpty() || seen.contains(BarcodeValidation.canonicalKey(value))) {
                 skipped++
                 continue
             }
-            seen += value
-            toImport += card
+            val (storedValue, storedSymbology) = BarcodeValidation.canonicalize(value, card.symbology)
+            seen += BarcodeValidation.canonicalKey(storedValue)
+            toImport += card.copy(barcodeValue = storedValue, symbology = storedSymbology)
         }
         return ImportPlan(toImport, skipped)
     }

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.barcodedeck.app.data.AppDatabase
+import dev.barcodedeck.app.data.BarcodeValidation
 import dev.barcodedeck.app.data.Card
 import dev.barcodedeck.app.data.displayBarcodeValue
 import dev.barcodedeck.app.data.displayName
@@ -29,13 +30,17 @@ class CardViewModel(application: Application) : AndroidViewModel(application) {
         barcodeValue: String,
         symbology: String? = null
     ) {
+        // Store the canonical EAN-13 form of UPC-A values so decks match
+        // across platforms and imports de-duplicate (see BarcodeValidation).
+        val (storedValue, storedSymbology) =
+            BarcodeValidation.canonicalize(barcodeValue.trim(), symbology)
         viewModelScope.launch {
             cardDao.insert(
                 Card(
                     name = name,
                     description = description,
-                    barcodeValue = barcodeValue,
-                    symbology = symbology
+                    barcodeValue = storedValue,
+                    symbology = storedSymbology
                 )
             )
         }

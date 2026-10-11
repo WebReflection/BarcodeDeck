@@ -84,6 +84,50 @@ class CardTransferTest {
     }
 
     @Test
+    fun `import plan treats a UPC-A value and its padded EAN-13 twin as the same card`() {
+        val export = CardTransfer.decode(
+            """
+            {"type":"barcodedeck-export","version":1,"exportedAt":"2026-01-01T00:00:00Z",
+             "cards":[{"name":"Same card","barcodeValue":"0400236325890","symbology":"EAN-13",
+                       "createdAt":"2026-01-01T00:00:00Z"}]}
+            """.trimIndent()
+        )
+        // The deck already holds the 12-digit UPC-A spelling of the same card.
+        val plan = CardTransfer.planImport(export, existingValues = setOf("400236325890"))
+        assertEquals(0, plan.toImport.size)
+        assertEquals(1, plan.skipped)
+    }
+
+    @Test
+    fun `import plan stores scanned UPC-A values padded as EAN-13`() {
+        val export = CardTransfer.decode(
+            """
+            {"type":"barcodedeck-export","version":1,"exportedAt":"2026-01-01T00:00:00Z",
+             "cards":[{"name":"Android scan","barcodeValue":"400236325890","symbology":"UPC-A",
+                       "createdAt":"2026-01-01T00:00:00Z"}]}
+            """.trimIndent()
+        )
+        val plan = CardTransfer.planImport(export, existingValues = emptySet())
+        assertEquals(1, plan.toImport.size)
+        assertEquals("0400236325890", plan.toImport[0].barcodeValue)
+        assertEquals("EAN-13", plan.toImport[0].symbology)
+    }
+
+    @Test
+    fun `import plan keeps an explicit Code 128 spelling of a 12-digit value`() {
+        val export = CardTransfer.decode(
+            """
+            {"type":"barcodedeck-export","version":1,"exportedAt":"2026-01-01T00:00:00Z",
+             "cards":[{"name":"Deliberate","barcodeValue":"400236325890","symbology":"Code 128",
+                       "createdAt":"2026-01-01T00:00:00Z"}]}
+            """.trimIndent()
+        )
+        val plan = CardTransfer.planImport(export, existingValues = emptySet())
+        assertEquals("400236325890", plan.toImport[0].barcodeValue)
+        assertEquals("Code 128", plan.toImport[0].symbology)
+    }
+
+    @Test
     fun `import plan skips blank values`() {
         val export = CardTransfer.decode(
             """{"type":"barcodedeck-export","version":1,"exportedAt":"2026-01-01T00:00:00Z","cards":["""
