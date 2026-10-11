@@ -50,6 +50,8 @@ Each folder is a self-contained app: open `barcode-deck-ios/BarcodeDeck.xcodepro
 
 [MIT](LICENSE) — the same license applies to the [`barcode-deck-ios/`](barcode-deck-ios/LICENSE) and [`barcode-deck-android/`](barcode-deck-android/LICENSE) projects.
 
+Barcode Deck is authored and maintained by [Andrea Giammarchi](https://github.com/WebReflection) — [@webreflection](https://github.com/WebReflection).
+
 *Barcode Deck is not a payment app and does not replace payment cards.*
 
 <sup><sub>Proudly developed via <strong>[GLM 5.3 Flash (EXL3)](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold)</strong> and my 3X DGX Sparks</sub></sup>

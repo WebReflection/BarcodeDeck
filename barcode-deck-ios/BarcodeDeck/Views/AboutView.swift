@@ -6,6 +6,7 @@ import SwiftUI
 enum About {
     static let projectURL = URL(string: "https://github.com/WebReflection/BarcodeDeck")!
     static let issuesURL = URL(string: "https://github.com/WebReflection/BarcodeDeck/issues")!
+    static let authorURL = URL(string: "https://github.com/WebReflection")!
     static let licenseName = "MIT License"
 
     static var version: String {
@@ -43,6 +44,9 @@ struct AboutView: View {
                     Link("Feedback & issues", destination: About.issuesURL)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                Link("by Andrea Giammarchi — @webreflection", destination: About.authorURL)
+                    .font(.footnote)
 
                 Text("Released under the \(About.licenseName).")
                     .font(.footnote)

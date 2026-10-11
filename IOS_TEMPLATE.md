@@ -82,7 +82,7 @@ xcodebuild -exportArchive -archivePath build/BarcodeDeck.xcarchive \
 | Subtitle (30) | `Your loyalty cards, one deck` |
 | Primary category | `Utilities` |
 | Secondary category | `Shopping` (or `Lifestyle`) |
-| Copyright | `© ✏️ <year> <your name>` |
+| Copyright | `© ✏️ <year> Andrea Giammarchi - @webreflection` |
 | Support URL | ✏️ the repo/issues URL or privacy-policy site |
 
 **Pricing & Availability:** `Free`, all territories.

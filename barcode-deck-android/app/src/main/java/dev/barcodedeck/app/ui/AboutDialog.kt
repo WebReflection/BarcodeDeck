@@ -1,6 +1,7 @@
 package dev.barcodedeck.app.ui
 
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,7 @@ import androidx.core.net.toUri
 object About {
     const val PROJECT_URL = "https://github.com/WebReflection/BarcodeDeck"
     const val ISSUES_URL = "$PROJECT_URL/issues"
+    const val AUTHOR_URL = "https://github.com/WebReflection"
     const val LICENSE_NAME = "MIT License"
 }
 
@@ -61,6 +63,12 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 TextButton(onClick = { openUrl(context, About.ISSUES_URL) }) {
                     Text("Feedback & issues")
                 }
+                Text(
+                    "by Andrea Giammarchi — @webreflection",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { openUrl(context, About.AUTHOR_URL) }
+                )
                 Text(
                     "Released under the ${About.LICENSE_NAME}.",
                     style = MaterialTheme.typography.bodySmall
