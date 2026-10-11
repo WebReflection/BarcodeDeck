@@ -4,6 +4,12 @@ Step-by-step notes for building and publishing the release artifacts to
 Google Play and the App Store. Nothing in this file is specific to any
 machine or account.
 
+> **Per-release walkthroughs:** use
+> [`ANDROID_TEMPLATE.md`](ANDROID_TEMPLATE.md) and
+> [`IOS_TEMPLATE.md`](IOS_TEMPLATE.md) — click-by-click checklists with
+> the exact values and store copy to enter. This file is the reference
+> behind them.
+
 ---
 
 ## 0. Before you start (both platforms)
