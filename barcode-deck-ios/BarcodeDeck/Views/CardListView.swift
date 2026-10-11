@@ -34,6 +34,7 @@ struct CardListView: View {
     @State private var showingImporter = false
     @State private var importSummary: CardTransfer.ImportSummary?
     @State private var importError: String?
+    @State private var showingAbout = false
 
     var body: some View {
         NavigationStack {
@@ -95,10 +96,18 @@ struct CardListView: View {
                         } label: {
                             Label("Import JSON…", systemImage: "square.and.arrow.down")
                         }
+
+                        Divider()
+
+                        Button {
+                            showingAbout = true
+                        } label: {
+                            Label("About Barcode Deck", systemImage: "info.circle")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel("Export or import cards")
+                    .accessibilityLabel("More options")
                 }
             }
             .fullScreenCover(isPresented: $showingScanner, onDismiss: promotePendingAdd) {
@@ -134,6 +143,9 @@ struct CardListView: View {
                 allowsMultipleSelection: false
             ) { result in
                 handleImportResult(result)
+            }
+            .sheet(isPresented: $showingAbout) {
+                AboutView()
             }
             .alert(
                 "Import complete",

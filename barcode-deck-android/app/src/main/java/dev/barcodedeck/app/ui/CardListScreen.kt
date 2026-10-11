@@ -76,6 +76,7 @@ fun CardListScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var menuOpen by remember { mutableStateOf(false) }
+    var aboutOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Undo window for deletions: the row is removed from the database
@@ -135,7 +136,7 @@ fun CardListScreen(
                 title = { Text("Barcode Deck", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { menuOpen = !menuOpen }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Export or import cards")
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
@@ -147,12 +148,19 @@ fun CardListScreen(
                             text = { Text("Import JSON…") },
                             onClick = { menuOpen = false; onImport() }
                         )
+                        DropdownMenuItem(
+                            text = { Text("About Barcode Deck") },
+                            onClick = { menuOpen = false; aboutOpen = true }
+                        )
                     }
                 }
             )
         },
         floatingActionButton = { content() }
     ) { padding ->
+        if (aboutOpen) {
+            AboutDialog(onDismiss = { aboutOpen = false })
+        }
         if (cards.isEmpty()) {
             EmptyState(modifier = Modifier.padding(padding))
         } else {
