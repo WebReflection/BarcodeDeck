@@ -31,8 +31,12 @@ android {
         // Play requires targeting the latest API for new submissions
         // (Android 16 / API 36 since Aug 31, 2026).
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        // versionCode history: 1 burned (first upload), 2 burned (R8
+        // rebuild), 3 burned (debug-symbols rebuild), 4 burned (camera
+        // fix, first upload), 5 burned (camera fix on the release track),
+        // 6 = 1.0.1 (ITF rendering, QR support).
+        versionCode = 6
+        versionName = "1.0.1"
     }
 
     signingConfigs {
@@ -48,7 +52,20 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrinking/optimization — Play Console's "DEX code
+            // optimization" score requires it, and it cuts the bundle
+            // size substantially (ML Kit dominates the uncompressed code).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            // Include extracted native debug symbols (from ML Kit's .so
+            // files) so Play can symbolicate native crashes and ANRs.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
             if (keystoreProperties.isNotEmpty()) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -87,6 +104,9 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.mlkit.barcode)
+    // QR code *generation* for presentation mode (ML Kit only scans).
+    // Pure-Java, offline, no Play Services — safe to bundle alongside ML Kit.
+    implementation(libs.zxing.core)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.kotlinx.coroutines.guava)
     implementation(libs.kotlinx.serialization.json)

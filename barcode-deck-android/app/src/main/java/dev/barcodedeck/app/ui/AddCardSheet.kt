@@ -109,6 +109,13 @@ fun AddCardSheet(
                         add("Uppercase letters, digits, space and - . \$ / + %." to false)
                     selectedType == "Code 128" ->
                         add("Letters, digits and symbols (plain ASCII)." to false)
+                    selectedType == "ITF" ->
+                        add(
+                            "Digits in pairs; a 14-digit code (ITF-14) gets its " +
+                                "check digit validated." to false
+                        )
+                    selectedType == "QR Code" ->
+                        add("Any text — encoded exactly as typed." to false)
                 }
             } else {
                 // Auto-detect: explain what the value resolves to.
@@ -117,7 +124,7 @@ fun AddCardSheet(
                 when {
                     classified != null ->
                         add("Auto-detected: $classified (valid check digit)." to false)
-                    allAsciiDigits && trimmedBarcodeValue.length in setOf(8, 12, 13) ->
+                    allAsciiDigits && trimmedBarcodeValue.length in setOf(8, 12, 13, 14) ->
                         add(
                             "Check digit doesn't match — double-check the digits. "
                                 + "Auto will save it as Code 128." to true
@@ -207,7 +214,7 @@ fun AddCardSheet(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = when (selectedType) {
-                        "EAN-13", "UPC-A" -> KeyboardType.Number
+                        "EAN-13", "UPC-A", "ITF" -> KeyboardType.Number
                         else -> KeyboardType.Ascii
                     },
                     capitalization = if (selectedType == "Code 39") {

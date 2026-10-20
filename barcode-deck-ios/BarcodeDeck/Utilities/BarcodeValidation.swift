@@ -4,8 +4,8 @@ import Vision
 /// and the 1D symbology set used for scanning.
 enum BarcodeValidation {
 
-    /// All linear (1D) symbologies we scan for. QR and other 2D codes are
-    /// intentionally excluded for v1.
+    /// All symbologies we scan for. QR is included (rendered as an image in
+    /// presentation mode); other 2D codes remain excluded for v1.
     static let scanSymbologies: [VNBarcodeSymbology] = [
         .ean13, .ean8, .upce,
         .code39, .code39FullASCII, .code93, .code93i, .code128,
@@ -14,6 +14,7 @@ enum BarcodeValidation {
         .msiPlessey,
         // Stacked linear codes, common on membership/ID cards.
         .pdf417, .microPDF417,
+        .qr,
     ]
 
     /// Human-readable name for a scanned symbology, or `nil` when unknown
@@ -35,6 +36,7 @@ enum BarcodeValidation {
         case .gs1DataBarLimited: return "GS1 DataBar Ltd."
         case .msiPlessey: return "MSI"
         case .pdf417, .microPDF417: return "PDF417"
+        case .qr: return "QR Code"
         default: return nil
         }
     }
@@ -96,8 +98,26 @@ enum BarcodeValidation {
         case 13 where hasValidGS1CheckDigit(value): return "EAN-13"
         case 12 where hasValidGS1CheckDigit(value): return "UPC-A"
         case 8 where hasValidGS1CheckDigit(value): return "EAN-8"
+        case 14 where hasValidGS1CheckDigit(value): return "ITF-14"
         default: return nil
         }
+    }
+
+    /// The trimmed value as an http(s) URL, or `nil`. This is the only
+    /// scheme the app will ever open (presentation mode's "open link"
+    /// button) — QR payloads can carry `javascript:`, `mailto:` etc., and
+    /// those must never be launched.
+    static func asHttpURL(_ value: String) -> URL? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = trimmed.lowercased()
+        guard lowered.hasPrefix("http://") || lowered.hasPrefix("https://") else {
+            return nil
+        }
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https"
+        else { return nil }
+        return url
     }
 
     // MARK: - Canonical storage form
@@ -129,7 +149,7 @@ enum BarcodeValidation {
     /// (`nil`) first. Only symbologies the app can render in presentation
     /// mode are offered — scanned cards may carry any scanned type.
     static let manualTypeOptions: [String?] = [
-        nil, "Code 128", "Code 39", "EAN-13", "UPC-A",
+        nil, "Code 128", "Code 39", "EAN-13", "ITF", "QR Code", "UPC-A",
     ]
 
     /// Resolves the Auto-detect selection into the symbology to store: a
@@ -194,6 +214,24 @@ enum BarcodeValidation {
             guard isCode128Encodable(value) else {
                 return "Code 128 needs plain ASCII characters."
             }
+        case "ITF":
+            guard asciiDigits(value) != nil else { return "ITF uses digits only." }
+            guard value.count % 2 == 0 else {
+                return "ITF needs an even number of digits (currently \(value.count))."
+            }
+            if value.count == 14 {
+                guard hasValidGS1CheckDigit(value) else {
+                    return "A 14-digit ITF (ITF-14) needs a valid check digit — "
+                        + "expected \(gs1CheckDigit(String(value.prefix(13))) ?? 0). "
+                        + "Double-check the digits."
+                }
+            }
+        case "QR Code":
+            if value.hasPrefix(BarcodePattern.base64Prefix),
+               BarcodePattern.decodeBase64Payload(value) == nil {
+                return "“base64,” values must continue with valid base64."
+            }
+            return nil  // Any text encodes; too-long values fall back to text.
         default:
             return nil
         }

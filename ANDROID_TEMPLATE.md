@@ -37,7 +37,7 @@ In `barcode-deck-android/app/build.gradle.kts` → `defaultConfig`:
 
 | Field | Put this |
 | --- | --- |
-| `versionCode` | ✏️ last one **+ 1** (Play rejects reused codes) |
+| `versionCode` | ✏️ last one **+ 1** (Play rejects reused codes — codes are burned even by draft uploads). **1–5 burned; 6 = 1.0.1 (ITF rendering, QR support). Next free: 7** |
 | `versionName` | ✏️ e.g. `"1.0.1"` |
 
 Keep iOS in sync ([`IOS_TEMPLATE.md`](IOS_TEMPLATE.md) §1).

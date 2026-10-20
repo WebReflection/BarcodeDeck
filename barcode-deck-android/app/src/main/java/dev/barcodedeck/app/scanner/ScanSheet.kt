@@ -51,6 +51,7 @@ fun ScanSheet(
     var cameraUnavailable by remember { mutableStateOf(false) }
     var hasPermission by rememberSaveable { mutableStateOf(false) }
     var permissionDenied by rememberSaveable { mutableStateOf(false) }
+    var verifiedReads by remember { mutableStateOf(0) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -70,9 +71,11 @@ fun ScanSheet(
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     onCapture(value, symbology)
                 },
+                onProgress = { verifiedReads = it },
                 onUnavailable = { cameraUnavailable = true }
             )
             Overlay(
+                verifiedReads = verifiedReads,
                 onManualEntry = onManualEntry,
                 onCancel = onCancel
             )
@@ -88,7 +91,11 @@ fun ScanSheet(
 }
 
 @Composable
-private fun Overlay(onManualEntry: () -> Unit, onCancel: () -> Unit) {
+private fun Overlay(
+    verifiedReads: Int,
+    onManualEntry: () -> Unit,
+    onCancel: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -114,11 +121,21 @@ private fun Overlay(onManualEntry: () -> Unit, onCancel: () -> Unit) {
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(32f, 32f)
             )
         }
-        Text(
-            "Align the barcode inside the frame",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.8f)
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "Align the barcode inside the frame",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.8f)
+            )
+            if (verifiedReads in 1 until REQUIRED_READS) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Verifying read $verifiedReads of $REQUIRED_READS — hold still",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White
+                )
+            }
+        }
         Row(modifier = Modifier.fillMaxWidth()) {
             TextButton(onClick = onManualEntry) {
                 Text("Type it in", color = Color.White)

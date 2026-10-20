@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// Renders a scanner-readable EAN-13/UPC-A barcode as pure vector graphics.
+/// Renders a scanner-readable barcode as pure vector graphics.
 ///
-/// Sizing rules (from the plan):
-/// - Fixed *physical* size, never proportional to screen size: magnification
-///   clamped to the GS1 80%–200% range (target ≤ 150%).
+/// Sizing rules (mirroring Android):
+/// - 1D: fixed *physical* size, never proportional to screen size —
+///   magnification clamped to 80%–200% of the symbology's nominal module
+///   width (target ≤ 150%).
+/// - 2D (QR): scaled to fill the available square, snapped to whole device
+///   pixels; the quiet zone is the surrounding white layout.
 /// - Bar widths snapped to whole device physical pixels — no anti-aliasing.
-/// - Quiet zones (11 modules each side) reserved inside the layout.
+/// - 1D bar height capped at ~60% of the symbol's own width.
 struct BarcodeView: View {
     let value: String
     let symbology: String?
@@ -16,36 +19,69 @@ struct BarcodeView: View {
 
     @Environment(\.displayScale) private var displayScale
 
+    /// Maximum characters of a QR payload previewed under the symbol.
+    private static let previewChars = 64
+
+    private var preview: String {
+        value.count <= Self.previewChars
+            ? value
+            : String(value.prefix(Self.previewChars)) + "…"
+    }
+
     var body: some View {
         GeometryReader { proxy in
-            let rendered = BarcodePattern.modulesForPresentation(value: value, symbology: symbology)
+            switch BarcodePattern.presentationBarcode(value: value, symbology: symbology) {
+            case .linear(let modules, let quietModules, let nominalModuleWidthMM):
+                VStack(spacing: 6) {
+                    Canvas { context, size in
+                        drawBars(
+                            modules,
+                            quietModules: quietModules,
+                            nominalModuleWidthMM: nominalModuleWidthMM,
+                            zoomScale: zoomScale,
+                            in: &context,
+                            size: size
+                        )
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            VStack(spacing: 6) {
-                Canvas { context, size in
-                    guard let rendered else { return }
-                    drawBars(
-                        rendered.modules,
-                        quietModules: rendered.quietModules,
-                        zoomScale: zoomScale,
-                        in: &context,
-                        size: size
-                    )
+                    Text(value)
+                        .font(.system(size: 16, weight: .medium, design: .monospaced))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.4)
+                        .foregroundStyle(.black)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                Text(value)
-                    .font(.system(size: 16, weight: .medium, design: .monospaced))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.4)
-                    .foregroundStyle(.black)
+            case .qr(let image, let moduleCount):
+                // QR shows the symbol plus a preview of its value underneath
+                // — payloads are often URLs, which the reader may also want
+                // to open (the "open link" button lives in the presentation
+                // header). The full payload always lives on the card itself
+                // (and in the JSON export); long or binary content is never
+                // rendered whole.
+                VStack(spacing: 6) {
+                    QRCodeContentView(
+                        image: image,
+                        moduleCount: moduleCount,
+                        zoomScale: zoomScale
+                    )
+                    Text(preview)
+                        .font(.system(size: 16, weight: .medium, design: .monospaced))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.4)
+                        .foregroundStyle(.black)
+                }
+            case nil:
+                // Not renderable here: PresentationView shows its own text
+                // fallback, so keep this view invisible.
+                Color.clear
             }
-            .opacity(rendered == nil ? 0 : 1)
         }
     }
 
     private func drawBars(
         _ modules: [Bool],
         quietModules: Int,
+        nominalModuleWidthMM: Double,
         zoomScale: CGFloat,
         in context: inout GraphicsContext,
         size: CGSize
@@ -56,14 +92,14 @@ struct BarcodeView: View {
         let mmPerPoint = 25.4 / 163.0
         let totalModules = modules.count + 2 * quietModules
 
-        // Magnification that fits the available width, clamped to GS1 80–200%,
+        // Magnification that fits the available width, clamped to 80–200%,
         // then scaled by the user's ephemeral pinch-zoom (if any).
         let fitMagnification = Double(size.width) * mmPerPoint
-            / (Double(totalModules) * BarcodePattern.nominalModuleWidthMM)
+            / (Double(totalModules) * nominalModuleWidthMM)
         let magnification = min(1.5, max(0.8, fitMagnification)) * Double(zoomScale)
 
         // Snap the module width to whole physical pixels.
-        var modulePixels = (BarcodePattern.nominalModuleWidthMM * magnification / mmPerPoint * scale)
+        var modulePixels = (nominalModuleWidthMM * magnification / mmPerPoint * scale)
             .rounded()
         modulePixels = max(2, modulePixels)
         // Safety: never overflow the available width.
@@ -76,8 +112,8 @@ struct BarcodeView: View {
         var x0 = (size.width - drawnWidth) / 2
         x0 = (x0 * scale).rounded() / scale  // snap the origin to the pixel grid too
 
-        // Never stretch the code tall: cap the bar height at ~60% of the
-        // symbol's own width (EAN-13-like aspect ratio), centered vertically.
+        // Never stretch the code tall: cap the bar height at ~60% of its own
+        // width (EAN-13-like aspect ratio), centered vertically.
         let barHeight = min(size.height, drawnWidth * 0.6)
         let y0 = (size.height - barHeight) / 2
 
@@ -90,7 +126,40 @@ struct BarcodeView: View {
     }
 }
 
+/// Square QR display: module size snapped to whole device pixels, zoom
+/// applied and capped at the available box, quiet zone left as white
+/// layout around the image (the background is always white here).
+private struct QRCodeContentView: View {
+    let image: CGImage
+    let moduleCount: Int
+    let zoomScale: CGFloat
+
+    @Environment(\.displayScale) private var displayScale
+
+    var body: some View {
+        GeometryReader { proxy in
+            let totalModules = CGFloat(moduleCount + BarcodePattern.qrQuietModules * 2)
+            let available = min(proxy.size.width, proxy.size.height)
+            let capped = min(available * zoomScale, available)
+            let modulePixels = max(1, (capped * displayScale / totalModules).rounded(.down))
+            let side = modulePixels * totalModules / displayScale
+            let imageSide = side * CGFloat(moduleCount) / totalModules
+
+            Image(uiImage: UIImage(cgImage: image))
+                .interpolation(.none)
+                .resizable()
+                .frame(width: imageSide, height: imageSide)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
 #Preview {
     BarcodeView(value: "4006381333931", symbology: "EAN-13")
+        .padding()
+}
+
+#Preview("QR") {
+    BarcodeView(value: "https://barcodedeck.dev", symbology: "QR Code")
         .padding()
 }

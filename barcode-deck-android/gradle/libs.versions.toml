@@ -9,6 +9,7 @@ coreKtx = "1.13.1"
 room = "2.8.5"
 camera = "1.4.0"
 mlkitBarcode = "17.3.0"
+zxingCore = "3.5.3"
 coroutinesPlayServices = "1.8.1"
 kotlinxSerialization = "1.7.3"
 
@@ -31,6 +32,7 @@ androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", 
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camera" }
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camera" }
 mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
 kotlinx-coroutines-guava = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-guava", version.ref = "coroutinesPlayServices" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }

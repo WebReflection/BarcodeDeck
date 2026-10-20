@@ -10,6 +10,7 @@ struct ScanSheet: View {
     let onCancel: () -> Void
 
     @State private var cameraUnavailable = false
+    @State private var verifiedReads = 0
 
     var body: some View {
         ZStack {
@@ -18,6 +19,7 @@ struct ScanSheet: View {
             } else {
                 ScannerCameraView(
                     onDetected: handleCapture,
+                    onProgress: { verifiedReads = $0 },
                     onUnavailable: { cameraUnavailable = true }
                 )
                 .ignoresSafeArea()
@@ -41,9 +43,16 @@ struct ScanSheet: View {
                 .frame(height: 180)
                 .padding(.horizontal, 48)
 
-            Text("Align the barcode inside the frame")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.8))
+            VStack(spacing: 6) {
+                Text("Align the barcode inside the frame")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.8))
+                if verifiedReads > 0 && verifiedReads < requiredReads {
+                    Text("Verifying read \(verifiedReads) of \(requiredReads) — hold still")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.white)
+                }
+            }
 
             Spacer()
 

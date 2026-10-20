@@ -32,36 +32,33 @@ struct PresentationView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            VStack(spacing: 0) {
-                // Top half: name and description.
-                VStack(alignment: .leading, spacing: 12) {
-                    // The toggle lives in the name row so it stays centered
-                    // with the top text line height, whatever the screen size.
-                    HStack(alignment: .center, spacing: 0) {
-                        Text(card.displayName)
-                            .font(.system(size: min(44, proxy.size.height * 0.12), weight: .bold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                            .foregroundStyle(.black)
-                        Spacer(minLength: 12)
-                        brightnessToggle
-                    }
-
-                    if let description = card.displayDescription {
-                        Text(description)
-                            .font(.system(size: min(22, proxy.size.height * 0.055)))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                            .foregroundStyle(.black.opacity(0.65))
-                    }
+            if isQrCard {
+                // QR: the symbol gets ALL the space between the header and
+                // its value line (rendered by BarcodeView) — square codes
+                // need the room, and the payload is only previewed on a
+                // single line.
+                VStack(spacing: 0) {
+                    header(height: proxy.size.height)
+                    BarcodeView(
+                        value: card.displayBarcodeValue,
+                        symbology: card.symbology,
+                        zoomScale: barcodeZoom
+                    )
+                    .gesture(zoomGesture)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(28)
+            } else {
+                VStack(spacing: 0) {
+                    // Top half: name and description.
+                    header(height: proxy.size.height)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-                // Bottom half: the barcode, centered in the remaining space.
-                cardBody
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    // Bottom half: the barcode, centered in the remaining space.
+                    cardBody
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                }
+                .padding(28)
             }
-            .padding(28)
         }
         .background(Color.white)
         .statusBarHidden()
@@ -119,22 +116,88 @@ struct PresentationView: View {
         .accessibilityHint("Applies to this presentation only and is not remembered")
     }
 
+    /// The QR payload as an http(s) URL, when openable. Only http(s) is ever
+    /// opened — other schemes (javascript:, mailto:, …) are ignored.
+    private var httpURL: URL? {
+        guard card.symbology == "QR Code" else { return nil }
+        return BarcodeValidation.asHttpURL(card.displayBarcodeValue)
+    }
+
+    /// Opens the QR payload in the browser. Shown in the name row next to the
+    /// brightness toggle; the button's own gesture takes precedence over the
+    /// tap/drag dismissal on the container.
+    private var openURLButton: some View {
+        Button {
+            if let url = httpURL {
+                UIApplication.shared.open(url)
+            }
+        } label: {
+            Image(systemName: "arrow.up.forward.square")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(.black.opacity(0.85))
+                .padding(12)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Open link in browser")
+    }
+
+    /// Name, optional description, and the top-end buttons ("open link"
+    /// for http(s) QR payloads, max-brightness toggle).
+    private func header(height: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // The toggle lives in the name row so it stays centered
+            // with the top text line height, whatever the screen size.
+            HStack(alignment: .center, spacing: 0) {
+                Text(card.displayName)
+                    .font(.system(size: min(44, height * 0.12), weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .foregroundStyle(.black)
+                Spacer(minLength: 12)
+                if httpURL != nil {
+                    openURLButton
+                }
+                brightnessToggle
+            }
+
+            if let description = card.displayDescription {
+                Text(description)
+                    .font(.system(size: min(22, height * 0.055)))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .foregroundStyle(.black.opacity(0.65))
+            }
+        }
+    }
+
+    /// Whether this card presents as a square QR symbol (which uses the
+    /// full-space layout) rather than a linear barcode.
+    private var isQrCard: Bool {
+        if case .qr = BarcodePattern.presentationBarcode(
+            value: card.displayBarcodeValue,
+            symbology: card.symbology
+        ) { return true }
+        return false
+    }
+
+    private var zoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { _ in isPinching = true }
+            .updating($pinchScale) { value, state, _ in state = value }
+            .onEnded { value in
+                lastPinchScale = min(2.5, max(0.5, lastPinchScale * value))
+                isPinching = false
+            }
+    }
+
     @ViewBuilder
     private var cardBody: some View {
-        if BarcodePattern.modulesForPresentation(
+        if BarcodePattern.presentationBarcode(
             value: card.displayBarcodeValue,
             symbology: card.symbology
         ) != nil {
             BarcodeView(value: card.displayBarcodeValue, symbology: card.symbology, zoomScale: barcodeZoom)
-                .gesture(
-                    MagnificationGesture()
-                        .onChanged { _ in isPinching = true }
-                        .updating($pinchScale) { value, state, _ in state = value }
-                        .onEnded { value in
-                            lastPinchScale = min(2.5, max(0.5, lastPinchScale * value))
-                            isPinching = false
-                        }
-                )
+                .gesture(zoomGesture)
         } else {
             // Non-renderable symbology (Code 128, PDF417, …): show the value
             // as large text — readable by a human, not by a scanner.

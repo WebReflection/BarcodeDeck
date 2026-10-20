@@ -12,9 +12,9 @@ One card less in the wallet. One app instead of twelve.
 
 ## What it does
 
-- **Scan** any barcode with the camera — EAN-13, UPC-A/UPC-E, Code 39, Code 93, Code 128, ITF, Codabar, PDF417 and more, recognized entirely on-device.
+- **Scan** any barcode with the camera — EAN-13, UPC-A/UPC-E, Code 39, Code 93, Code 128, ITF, Codabar, PDF417, QR and more, recognized entirely on-device.
 - **Type it in** manually when there is nothing to scan — with a barcode-type selector, live format validation, check-digit verification, and duplicate detection.
-- **Present** any card full-screen in landscape, rendered to true GS1 proportions (EAN-13, UPC-A, Code 39, Code 128) so real scanners read it on the first try.
+- **Present** any card full-screen in landscape, rendered to true GS1 proportions (EAN-13, UPC-A, EAN-8, Code 39, Code 128, ITF) so real scanners read it on the first try — plus QR codes, shown as a crisp square symbol.
 - **Save, restore, and share your whole deck**: export everything to a single, human-readable JSON file — keep it as a backup, restore it on a new phone, or hand it to another device. No servers involved: the file is yours.
 - **Organize** your deck: long-press and drag to reorder; deleting shows a 5-second undo bar, then the card is permanently gone.
 

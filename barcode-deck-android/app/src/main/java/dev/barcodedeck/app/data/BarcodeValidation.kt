@@ -30,6 +30,7 @@ object BarcodeValidation {
         value.length == 13 && hasValidGS1CheckDigit(value) -> "EAN-13"
         value.length == 12 && hasValidGS1CheckDigit(value) -> "UPC-A"
         value.length == 8 && hasValidGS1CheckDigit(value) -> "EAN-8"
+        value.length == 14 && hasValidGS1CheckDigit(value) -> "ITF-14"
         else -> null
     }
 
@@ -65,13 +66,23 @@ object BarcodeValidation {
     fun canonicalKey(value: String): String =
         if (isValidUPCA(value)) "0$value" else value
 
+    /** The trimmed value as an http(s) URL, or null. This is the only
+     *  scheme the app will ever open (presentation mode's "open link"
+     *  button) — QR payloads can carry javascript:, intent:, mailto: etc.,
+     *  and those must never be launched. */
+    fun asHttpUrl(value: String): String? =
+        value.trim().takeIf {
+            it.startsWith("http://", ignoreCase = true) ||
+                it.startsWith("https://", ignoreCase = true)
+        }
+
     // MARK: - Manual entry
 
     /** Types offered for manual entry, alphabetically, with Auto-detect
      *  (null) first. Only symbologies the app can render in presentation
      *  mode are offered — scanned cards may carry any scanned type. */
     val manualTypeOptions: List<String?> =
-        listOf(null, "Code 128", "Code 39", "EAN-13", "UPC-A")
+        listOf(null, "Code 128", "Code 39", "EAN-13", "ITF", "QR Code", "UPC-A")
 
     /** Resolves the Auto-detect selection into the symbology to store: a
      *  valid GS1 classification when the digits match one, otherwise Code 128
@@ -123,6 +134,20 @@ object BarcodeValidation {
             }
             "Code 128" -> if (isCode128Encodable(value)) null
                 else "Code 128 needs plain ASCII characters."
+            "ITF" -> when {
+                !value.all { it in '0'..'9' } -> "ITF uses digits only."
+                value.length % 2 != 0 ->
+                    "ITF needs an even number of digits (currently ${value.length})."
+                value.length == 14 && !hasValidGS1CheckDigit(value) ->
+                    "A 14-digit ITF (ITF-14) needs a valid check digit — " +
+                        "expected ${gs1CheckDigit(value.take(13))}. Double-check the digits."
+                else -> null
+            }
+            "QR Code" -> if (value.startsWith(BarcodePattern.BASE64_PREFIX) &&
+                BarcodePattern.decodeBase64Payload(value) == null
+            ) {
+                "“base64,” values must continue with valid base64."
+            } else null  // Any text encodes; too-long values fall back to text.
             else -> null
         }
     }

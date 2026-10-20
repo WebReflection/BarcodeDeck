@@ -114,7 +114,7 @@ struct AddCardView: View {
     }
 
     private var isGS1Type: Bool {
-        selectedType == "EAN-13" || selectedType == "UPC-A"
+        selectedType == "EAN-13" || selectedType == "UPC-A" || selectedType == "ITF"
     }
 
     /// Uppercases input while Code 39 is selected (it has no lowercase).
@@ -201,6 +201,17 @@ struct AddCardView: View {
                         text: "Letters, digits and symbols (plain ASCII).",
                         isError: false
                     ))
+                } else if selectedType == "ITF" {
+                    messages.append(FooterMessage(
+                        text: "Digits in pairs; a 14-digit code (ITF-14) gets its "
+                            + "check digit validated.",
+                        isError: false
+                    ))
+                } else if selectedType == "QR Code" {
+                    messages.append(FooterMessage(
+                        text: "Any text — encoded exactly as typed.",
+                        isError: false
+                    ))
                 }
             } else {
                 // Auto-detect: explain what the value resolves to.
@@ -210,7 +221,7 @@ struct AddCardView: View {
                         isError: false
                     ))
                 } else if value.allSatisfy({ $0.isASCII && $0.isNumber }),
-                          value.count == 13 || value.count == 12 || value.count == 8 {
+                          [8, 12, 13, 14].contains(value.count) {
                     messages.append(FooterMessage(
                         text: "Check digit doesn't match — double-check the digits. "
                             + "Auto will save it as Code 128.",

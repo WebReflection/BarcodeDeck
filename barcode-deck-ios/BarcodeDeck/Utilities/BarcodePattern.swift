@@ -1,8 +1,21 @@
+import CoreImage
 import Foundation
 
+/// A value resolved into something presentation mode can draw.
+enum PresentationBarcode {
+    /// 1D symbol: module runs, quiet zone, nominal module width (mm).
+    case linear(modules: [Bool], quietModules: Int, nominalModuleWidthMM: Double)
+
+    /// 2D symbol: QR code image plus its module count (the generator emits
+    /// one pixel per module, no quiet zone).
+    case qr(image: CGImage, moduleCount: Int)
+}
+
 /// Encodes barcode values into module patterns (`true` = bar, `false` = space).
-/// v1 renders EAN-13 and UPC-A (UPC-A is encoded as EAN-13 with a leading 0 —
-/// the bar patterns are identical).
+/// Kotlin port of the Android BarcodePattern — same tables, same test vectors.
+///
+/// Renders EAN-13, EAN-8, UPC-A (encoded as EAN-13 with a leading 0), Code 128
+/// (Code Set B), Code 39, ITF (incl. ITF-14) and QR codes.
 enum BarcodePattern {
 
     /// Number of modules in a complete EAN-13 symbol.
@@ -11,34 +24,71 @@ enum BarcodePattern {
     /// Nominal module width at 100% magnification, in millimetres (GS1).
     static let nominalModuleWidthMM = 0.33
 
+    /// ITF-14's GS1 minimum X-dimension is 0.495 mm, so ITF renders with a
+    /// larger nominal module than 1D retail codes.
+    static let itfNominalModuleWidthMM = 0.495
+
     /// Reserved quiet zones for EAN-13, in modules (GS1: ≥ 11 left, ≥ 7 right).
     static let ean13QuietModules = 11
+    static let ean8QuietModules = 7
+    static let code128QuietModules = 10
+    static let code39QuietModules = 10
+    static let itfQuietModules = 10
 
-    /// Returns the module pattern for a value plus its required quiet zone
-    /// (in modules), or `nil` when the value cannot be rendered.
+    /// QR quiet zone (spec recommendation: 4 modules).
+    static let qrQuietModules = 4
+
+    /// Shared CoreImage context for QR generation (created lazily, once).
+    private static let ciContext = CIContext()
+
+    /// Resolves a card into a drawable pattern, or `nil` when the value cannot
+    /// be rendered (presentation falls back to plain text).
     ///
-    /// - 13 digits + valid check digit → EAN-13.
-    /// - 12 digits + valid check digit → UPC-A, normalized to EAN-13
-    ///   (only when the symbology is UPC-A or unknown, so a 12-digit
-    ///   Code 128 is never misrendered).
-    /// - Anything else that is printable ASCII → Code 128 (Code Set B),
-    ///   when the symbology is Code 128 or unknown.
-    static func modulesForPresentation(
+    /// Explicit symbologies render in their own encoding. Values scanned as
+    /// (or without) an encodable type fall back to the universally scannable
+    /// GS1 encodings, then Code 128.
+    static func presentationBarcode(
         value: String,
         symbology: String?
-    ) -> (modules: [Bool], quietModules: Int)? {
+    ) -> PresentationBarcode? {
+        // 2D first: a QR card stays QR even if its value looks like a GS1 code.
+        if symbology == "QR Code" {
+            return qrCode(for: value).map {
+                PresentationBarcode.qr(image: $0.image, moduleCount: $0.moduleCount)
+            }
+        }
+        if symbology == "ITF" || symbology == "ITF-14" {
+            return itfModules(value).map {
+                .linear(modules: $0, quietModules: itfQuietModules,
+                        nominalModuleWidthMM: itfNominalModuleWidthMM)
+            }
+        }
+        if symbology == "Code 39" {
+            return code39Modules(value).map {
+                .linear(modules: $0, quietModules: code39QuietModules,
+                        nominalModuleWidthMM: nominalModuleWidthMM)
+            }
+        }
+        if symbology == "Code 128" {
+            return code128Modules(value).map {
+                .linear(modules: $0, quietModules: code128QuietModules,
+                        nominalModuleWidthMM: nominalModuleWidthMM)
+            }
+        }
+        // symbology == nil or a scanned type with no encoder of its own
+        // (UPC-E, Code 93, Codabar, PDF417, …): try GS1, then Code 128.
         if let ean13 = ean13Path(value: value, symbology: symbology) {
-            return (ean13, ean13QuietModules)
+            return .linear(modules: ean13, quietModules: ean13QuietModules,
+                           nominalModuleWidthMM: nominalModuleWidthMM)
         }
-        if symbology == "Code 39", let code39 = code39Modules(value) {
-            return (code39, code39QuietModules)
+        if value.count == 8, let ean8 = ean8Modules(value) {
+            return .linear(modules: ean8, quietModules: ean8QuietModules,
+                           nominalModuleWidthMM: nominalModuleWidthMM)
         }
-        if symbology == "Code 128" || symbology == nil,
-           let code128 = code128Modules(value)
-        {
-            return (code128, code128QuietModules)
+        return code128Modules(value).map {
+            .linear(modules: $0, quietModules: code128QuietModules,
+                    nominalModuleWidthMM: nominalModuleWidthMM)
         }
-        return nil
     }
 
     private static func ean13Path(value: String, symbology: String?) -> [Bool]? {
@@ -98,6 +148,119 @@ enum BarcodePattern {
         return modules
     }
 
+    /// Encodes an 8-digit EAN-8 value into its 67-module pattern:
+    /// guard + 4 L digits + center guard + 4 R digits + guard.
+    static func ean8Modules(_ value: String) -> [Bool]? {
+        guard value.count == 8,
+              let digits = asciiDigits(value),
+              BarcodeValidation.hasValidGS1CheckDigit(value)
+        else { return nil }
+
+        var modules: [Bool] = []
+        func append(_ pattern: String) { modules.append(contentsOf: pattern.map { $0 == "1" }) }
+
+        append("101")
+        for digit in digits[0...3] { append(lCodes[digit]) }
+        append("01010")
+        for digit in digits[4...7] { append(rCodes[digit]) }
+        append("101")
+        return modules
+    }
+
+    // MARK: - ITF (Interleaved 2 of 5) / ITF-14
+
+    /// Encodes an even-length digit string into its ITF module pattern.
+    /// Each digit pair interleaves the first digit into the bars and the
+    /// second into the spaces; every digit is 5 elements, exactly 2 wide
+    /// (3 modules each), the rest narrow (1 module).
+    /// A 14-digit value is an ITF-14 and must carry a valid GS1 check digit
+    /// (scanners reject the symbol otherwise).
+    static func itfModules(_ value: String) -> [Bool]? {
+        guard value.count >= 2, value.count % 2 == 0,
+              let digits = asciiDigits(value)
+        else { return nil }
+        if value.count == 14 && !BarcodeValidation.hasValidGS1CheckDigit(value) {
+            return nil
+        }
+
+        var modules: [Bool] = []
+        // Start: narrow bar, narrow space, narrow bar, narrow space.
+        modules.append(contentsOf: [true, false, true, false])
+        for pair in stride(from: 0, to: digits.count, by: 2) {
+            let bars = Array(itfWidePatterns[digits[pair]])
+            let spaces = Array(itfWidePatterns[digits[pair + 1]])
+            for i in 0..<5 {
+                modules.append(contentsOf: Array(repeating: true, count: bars[i] == "1" ? 3 : 1))
+                modules.append(contentsOf: Array(repeating: false, count: spaces[i] == "1" ? 3 : 1))
+            }
+        }
+        // Stop: wide bar, narrow space, narrow bar.
+        modules.append(contentsOf: [true, true, true, false, true])
+        return modules
+    }
+
+    /// Which of the 5 elements are wide ('1') for each digit: bars carry the
+    /// first digit of a pair, spaces the second.
+    private static let itfWidePatterns = [
+        "00110",  // 0: NNWWN
+        "10001",  // 1: WNNNW
+        "01001",  // 2: NWNNW
+        "11000",  // 3: WWNNN
+        "00101",  // 4: NNWNW
+        "10100",  // 5: WNWNN
+        "01100",  // 6: NWWNN
+        "00011",  // 7: NNNWW
+        "10010",  // 8: WNNWN
+        "01010",  // 9: NWNWN
+    ]
+
+    // MARK: - QR Code
+
+    /// The reserved prefix marking a base64-encoded binary QR payload.
+    /// Stored in the plain `barcodeValue` string so decks stay importable
+    /// on every app version: old versions show it as text, new ones render
+    /// the original bytes.
+    static let base64Prefix = "base64,"
+
+    /// Decodes the payload of a `base64,…` value, or `nil` when malformed.
+    static func decodeBase64Payload(_ value: String) -> Data? {
+        guard value.hasPrefix(base64Prefix), value.count > base64Prefix.count else {
+            return nil
+        }
+        // ignoreUnknownCharacters tolerates the line wraps some encoders insert.
+        return Data(
+            base64Encoded: String(value.dropFirst(base64Prefix.count)),
+            options: [.ignoreUnknownCharacters]
+        )
+    }
+
+    /// Generates a QR code image (error correction level M) via CoreImage.
+    /// Returns the image and its module count — the generator emits one
+    /// pixel per module with no quiet zone (the renderer reserves it).
+    /// A `base64,…` value is decoded and encoded byte-for-byte; nil when
+    /// the value is empty, malformed, or too long for a QR symbol.
+    static func qrCode(for value: String) -> (image: CGImage, moduleCount: Int)? {
+        guard !value.isEmpty else { return nil }
+        let payload: Data
+        if value.hasPrefix(base64Prefix) {
+            guard let bytes = decodeBase64Payload(value) else { return nil }
+            payload = bytes
+        } else {
+            guard let utf8 = value.data(using: .utf8) else { return nil }
+            payload = utf8
+        }
+        guard payload.count <= 2331,  // QR byte-mode capacity, version 40 at level M
+              let filter = CIFilter(name: "CIQRCodeGenerator")
+        else { return nil }
+        filter.setValue(payload, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let output = filter.outputImage,
+              let image = ciContext.createCGImage(output, from: output.extent),
+              image.width > 0, image.width == image.height
+        else { return nil }
+        return (image, image.width)
+    }
+
     // MARK: - Encoding tables (GS1 EAN-13)
 
     /// L (odd) patterns for digits 0–9, 7 modules each.
@@ -126,9 +289,6 @@ enum BarcodePattern {
     ]
 
     // MARK: - Code 128 (Code Set B)
-
-    /// Quiet zone for Code 128, in modules (GS1 general standard: 10×).
-    static let code128QuietModules = 10
 
     /// Encodes a printable-ASCII value (Code Set B) into its module pattern:
     /// start B + data + checksum + stop.
@@ -206,9 +366,6 @@ enum BarcodePattern {
     ]
 
     // MARK: - Code 39
-
-    /// Quiet zone for Code 39, in modules (GS1 general standard: 10×).
-    static let code39QuietModules = 10
 
     /// Internal so BarcodeValidation can validate manual entry against the
     /// exact charset the encoder accepts.
